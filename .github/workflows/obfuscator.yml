@@ -8,6 +8,11 @@ on:
       - 'package.json'
       - 'package-lock.json'
   workflow_dispatch:
+  workflow_run:
+    workflows: ["定时同步上游"]
+    branches: [main]
+    types:
+      - completed
 
 jobs:
   obfuscate:
