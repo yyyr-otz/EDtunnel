@@ -1,40 +1,43 @@
-name: "🔄 Sync all branches with main"
-
+name: 定时同步上游
 on:
-  workflow_dispatch:
+  workflow_dispatch:  # 手动触发
+  schedule:
+    - cron: '0 3 * * *'  # 每天 UTC 3:00 
+permissions:
+  contents: write
 
 jobs:
-  sync_branches:
+  sync:
     runs-on: ubuntu-latest
-    name: "🔄 Sync branches with main"
-    env:
-      EMAIL: ${{ secrets.GH_EMAIL }}
-      NAME: ${{ secrets.GH_USERNAME }}
-      TOKEN: ${{ secrets.TOKEN }}
-      REMOTE_NAME: origin
-      BRANCH_BASE_NAME: proxyip
-      BRANCH_COUNT: 200
-
     steps:
-      - name: 🛠 Set up Git config
+      - name: 检出
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 获取完整 Git 历史
+          token: ${{ secrets.MYTOKEN }}
+      - name: 合并
         run: |
-          git config --global user.email "${{ env.EMAIL }}"
-          git config --global user.name "${{ env.NAME }}"
-
-      - name: 📥 Clone repository
-        run: |
-          git clone https:///${{ env.TOKEN }}@github.com/${{github.repository}}.git
-          cd $(echo ${{github.repository}} | awk -F'/' '{print $2}')
-
-      - name: 🔄 Sync and push branches
-        run: |
-          cd $(echo ${{github.repository}} | awk -F'/' '{print $2}')
+          # 添加上游仓库（允许已存在）
+          git remote add upstream https://github.com/6Kmfi6HP/EDtunnel.git || true
+          # 设置提交者信息
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          # 拉取上游变更
+          git fetch upstream
           git checkout main
-          git pull ${REMOTE_NAME} main
-          for ((i=1; i<=${{ env.BRANCH_COUNT }}; i++)); do
-            branch_name="${{ env.BRANCH_BASE_NAME }}${i}"
-            git checkout $branch_name
-            git merge main --no-edit
-            git push ${REMOTE_NAME} $branch_name
-            git checkout main
-          done
+          git merge upstream/main || true
+          # 恢复要保留的文件和目录
+          git checkout HEAD -- .github/workflows/sync.yml
+          # 提交更改
+          git add -A
+          git commit -m "自动合并上游" || echo "没有需要提交的更改"
+          # 推送到你的 fork 的 main 分支
+          # git push origin main
+          git push "https://${{ secrets.MYTOKEN }}@github.com/${{ github.repository }}.git" main
+      - name: 清理工作流
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          token: ${{ secrets.MYPAT }}
+          repository: ${{ github.repository }}
+          retain_days: 0
+          keep_minimum_runs: 1
